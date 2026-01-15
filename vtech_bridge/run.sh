@@ -2,6 +2,15 @@
 
 echo "Starting VTech Bridge Add-on..."
 
+# Diagnostic Checks
+echo "--- DIAGNOSTICS ---"
+python3 --version
+echo "Checking IOTC library..."
+python3 -c "try: import iotc; print('IOTC Library: Found'); except ImportError: print('IOTC Library: MISSING')"
+echo "Listing root directory:"
+ls -la /
+echo "-------------------"
+
 # Read config from Home Assistant options
 CAMERA_UID=$(bashio::config 'uid')
 AUTH_KEY=$(bashio::config 'auth_key')
