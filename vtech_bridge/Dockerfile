@@ -34,11 +34,9 @@ RUN pip3 install --target /arm64_env/usr/local/lib/python3.12/site-packages \
 WORKDIR /app
 COPY run.sh bridge.py vtech_stream_codes.py iotc.py test_libs.py /app/
 
-# Copy libs to system path (where iotc.py looks) and ARM env path (just in case)
-COPY libIOTCAPIs.so /usr/lib/
-COPY libAVAPIs.so /usr/lib/
-COPY libIOTCAPIs.so /arm64_env/usr/lib/
-COPY libAVAPIs.so /arm64_env/usr/lib/
+# Copy all libs to system path (where iotc.py looks) and ARM env path
+COPY *.so /usr/lib/
+COPY *.so /arm64_env/usr/lib/
 
 RUN chmod a+x /app/run.sh
 
