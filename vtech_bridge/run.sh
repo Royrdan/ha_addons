@@ -4,12 +4,11 @@ echo "Starting VTech Bridge Add-on..."
 
 # Diagnostic Checks
 echo "--- DIAGNOSTICS ---"
-echo "Host Python (x86):"
 python3 --version
-echo "ARM64 Python (via QEMU):"
-qemu-aarch64-static -L /arm64_env /arm64_env/usr/local/bin/python3 --version
-echo "Checking IOTC library (ARM64)..."
-qemu-aarch64-static -L /arm64_env /arm64_env/usr/local/bin/python3 /app/iotc.py
+echo "Checking IOTC library..."
+python3 /iotc.py
+echo "Listing root directory:"
+ls -la /
 echo "-------------------"
 
 # Read config from Home Assistant options
@@ -35,8 +34,7 @@ echo "Configuring go2rtc..."
 cat > /debug_wrapper.sh <<'EOF'
 #!/bin/bash
 echo "$(date): Starting bridge with args: $@" >> /var/log/bridge.err
-# Execute bridge using ARM64 Python via QEMU
-exec qemu-aarch64-static -L /arm64_env /arm64_env/usr/local/bin/python3 -u /app/bridge.py "$@" 2>> /var/log/bridge.err
+exec python3 -u /bridge.py "$@" 2>> /var/log/bridge.err
 EOF
 chmod +x /debug_wrapper.sh
 
