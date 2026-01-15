@@ -21,16 +21,16 @@ RUN if [ "${BUILD_ARCH}" = "aarch64" ]; then \
 
 # Install Python dependencies
 # Attempt to install a common library, but users often need to provide their own IOTC wrapper
-RUN pip3 install --no-cache-dir requests tutk-iotc || true
+RUN pip3 install --no-cache-dir requests
 
 # Copy data
 COPY run.sh /
 COPY bridge.py /
 COPY vtech_stream_codes.py /
 
-# If you have local library files (e.g. iotc.py, libIOTCAPIs.so), they will be copied here
-# COPY iotc.py /
-# COPY lib/ /lib/
+# Copy custom IOTC wrapper and native library
+COPY iotc.py /
+COPY libIOTCAPIs.so /usr/lib/
 
 RUN chmod a+x /run.sh
 
