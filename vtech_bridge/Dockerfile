@@ -28,6 +28,8 @@ COPY vtech_stream_codes.py /
 
 # Copy custom IOTC wrapper and native library
 COPY iotc.py /
+COPY test_libs.py /
+COPY libs /libs
 COPY libIOTCAPIs.so /usr/lib/
 COPY libAVAPIs.so /usr/lib/
 
