@@ -25,4 +25,4 @@ rtsp:
 EOF
 
 echo "Starting go2rtc..."
-go2rtc -c /tmp/go2rtc.yaml
+go2rtc -config /tmp/go2rtc.yaml
