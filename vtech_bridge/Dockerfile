@@ -21,7 +21,7 @@ RUN if [ "${BUILD_ARCH}" = "aarch64" ]; then \
 
 # Install Python dependencies
 # Attempt to install a common library, but users often need to provide their own IOTC wrapper
-RUN pip3 install --no-cache-dir requests || true
+RUN pip3 install --no-cache-dir requests tutk-iotc || true
 
 # Copy data
 COPY run.sh /
