@@ -75,6 +75,19 @@ def TUTK_SDK_Set_Region(region_code):
         print(f"TUTK_SDK_Set_Region error: {e}", file=sys.stderr)
         return -1
 
+def TUTK_SDK_Set_License_Key(key):
+    try:
+        fn = _lib.TUTK_SDK_Set_License_Key
+        fn.argtypes = [ctypes.c_char_p]
+        fn.restype = ctypes.c_int
+        return fn(key.encode('utf-8'))
+    except AttributeError:
+        print("TUTK_SDK_Set_License_Key not found in library.", file=sys.stderr)
+        return 0
+    except Exception as e:
+        print(f"TUTK_SDK_Set_License_Key error: {e}", file=sys.stderr)
+        return -1
+
 def IOTC_Get_Version():
     try:
         fn = _lib.IOTC_Get_Version

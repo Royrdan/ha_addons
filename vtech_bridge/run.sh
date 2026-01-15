@@ -17,10 +17,17 @@ CONFIG_PATH="/data/options.json"
 if [ -f "$CONFIG_PATH" ]; then
     CAMERA_UID=$(jq -r '.uid // empty' $CONFIG_PATH)
     AUTH_KEY=$(jq -r '.auth_key // empty' $CONFIG_PATH)
+    SDK_KEY=$(jq -r '.sdk_key // empty' $CONFIG_PATH)
 else
     echo "Warning: /data/options.json not found. Using environment variables if available."
     CAMERA_UID=${CAMERA_UID}
     AUTH_KEY=${AUTH_KEY}
+    SDK_KEY=${SDK_KEY}
+fi
+
+# Export SDK_KEY if found
+if [ -n "$SDK_KEY" ]; then
+    export SDK_KEY="$SDK_KEY"
 fi
 
 if [ -z "$CAMERA_UID" ] || [ -z "$AUTH_KEY" ]; then

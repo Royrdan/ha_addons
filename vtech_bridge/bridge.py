@@ -15,7 +15,7 @@ import vtech_stream_codes as vtech
 # Mock iotc for demonstration if not installed
 try:
     import iotc
-    from iotc import IOTC_Initialize2, IOTC_DeInitialize, IOTC_Connect_ByUID_Parallel, IOTC_Connect_ByUID, avClientStart, avSendIOCtrl, avRecvFrameData2, avInitialize, avDeInitialize, IOTC_Set_Log_Attr, IOTC_Get_SessionID, TUTK_SDK_Set_Region
+    from iotc import IOTC_Initialize2, IOTC_DeInitialize, IOTC_Connect_ByUID_Parallel, IOTC_Connect_ByUID, avClientStart, avSendIOCtrl, avRecvFrameData2, avInitialize, avDeInitialize, IOTC_Set_Log_Attr, IOTC_Get_SessionID, TUTK_SDK_Set_Region, TUTK_SDK_Set_License_Key
 except ImportError:
     print("CRITICAL ERROR: 'iotc' library not found.", file=sys.stderr)
     # Define mocks so the script structure is visible, but exit early if run
@@ -31,6 +31,7 @@ except ImportError:
     def IOTC_Set_Log_Attr(log_level, path): pass
     def IOTC_Get_SessionID(): return -1
     def TUTK_SDK_Set_Region(region_code): return 0
+    def TUTK_SDK_Set_License_Key(key): return 0
 
 STATE_FILE = "/data/bridge_state.json"
 
@@ -79,6 +80,17 @@ def bridge_worker(uid, auth_key, region, method, status_queue):
         print(f"[Worker] Set Region: {region}", file=sys.stderr)
     except Exception as e:
         print(f"[Worker] Failed to set region: {e}", file=sys.stderr)
+
+    # 0.6 Set License Key
+    sdk_key = os.getenv("SDK_KEY") or os.getenv("TUTK_LICENSE_KEY")
+    if sdk_key:
+        try:
+            print(f"[Worker] Setting License Key (len={len(sdk_key)})...", file=sys.stderr)
+            TUTK_SDK_Set_License_Key(sdk_key)
+        except Exception as e:
+            print(f"[Worker] Failed to set license key: {e}", file=sys.stderr)
+    else:
+        print("[Worker] No SDK_KEY provided. Connection may hang if library requires it.", file=sys.stderr)
 
     # 1. Initialize IOTC
     init_ret = IOTC_Initialize2(0)
