@@ -52,9 +52,16 @@ def main():
 
     # 2. Connect to Device
     print(f"Trying IOTC_Connect_ByUID...", file=sys.stderr)
-    sid = IOTC_Connect_ByUID(uid)
+    sid = -1
+    for i in range(3):
+        sid = IOTC_Connect_ByUID(uid)
+        if sid >= 0:
+            break
+        print(f"IOTC_Connect_ByUID failed ({sid}). Retrying ({i+1}/3)...", file=sys.stderr)
+        time.sleep(1)
+        
     if sid < 0:
-        print(f"IOTC_Connect_ByUID failed ({sid}). Trying Parallel...", file=sys.stderr)
+        print(f"IOTC_Connect_ByUID failed after retries. Trying Parallel...", file=sys.stderr)
         sid = IOTC_Connect_ByUID_Parallel(uid, 0)
     
     if sid < 0:
@@ -68,7 +75,14 @@ def main():
     # 3. Start AV Client
     # Channel 0 is standard. 
     # Account/Password is often "admin" and the AuthKey, or just AuthKey.
-    av_index = avClientStart(sid, "admin", auth_key, 30, 0, 0)
+    av_index = -1
+    for i in range(3):
+        av_index = avClientStart(sid, "admin", auth_key, 30, 0, 0)
+        if av_index >= 0:
+            break
+        print(f"avClientStart failed ({av_index}). Retrying ({i+1}/3)...", file=sys.stderr)
+        time.sleep(1)
+
     if av_index < 0:
         print(f"Failed to start AV client. Error code: {av_index}", file=sys.stderr)
         iotc.IOTC_Session_Close(sid)

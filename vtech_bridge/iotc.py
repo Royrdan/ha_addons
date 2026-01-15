@@ -10,7 +10,8 @@ if not os.path.exists(lib_path):
     lib_path = os.path.join(os.path.dirname(__file__), "libIOTCAPIs.so")
 
 try:
-    _lib = ctypes.CDLL(lib_path)
+    # Load with RTLD_GLOBAL so symbols are available to libAVAPIs
+    _lib = ctypes.CDLL(lib_path, mode=ctypes.RTLD_GLOBAL)
 except OSError as e:
     print(f"Failed to load library {lib_path}: {e}", file=sys.stderr)
     raise
