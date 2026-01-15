@@ -62,7 +62,17 @@ def IOTC_Connect_ByUID_Parallel(uid, sid):
         fn.restype = ctypes.c_int
         return fn(uid.encode('utf-8'), sid)
     except Exception as e:
-        print(f"IOTC_Connect error: {e}", file=sys.stderr)
+        print(f"IOTC_Connect_ByUID_Parallel error: {e}", file=sys.stderr)
+        return -1
+
+def IOTC_Connect_ByUID(uid):
+    try:
+        fn = _lib.IOTC_Connect_ByUID
+        fn.argtypes = [ctypes.c_char_p]
+        fn.restype = ctypes.c_int
+        return fn(uid.encode('utf-8'))
+    except Exception as e:
+        print(f"IOTC_Connect_ByUID error: {e}", file=sys.stderr)
         return -1
 
 def IOTC_Session_Close(sid):

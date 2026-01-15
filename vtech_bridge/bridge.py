@@ -11,7 +11,7 @@ import vtech_stream_codes as vtech
 # Mock iotc for demonstration if not installed
 try:
     import iotc
-    from iotc import IOTC_Initialize2, IOTC_DeInitialize, IOTC_Connect_ByUID_Parallel, avClientStart, avSendIOCtrl, avRecvFrameData2
+    from iotc import IOTC_Initialize2, IOTC_DeInitialize, IOTC_Connect_ByUID_Parallel, IOTC_Connect_ByUID, avClientStart, avSendIOCtrl, avRecvFrameData2
 except ImportError:
     print("CRITICAL ERROR: 'iotc' library not found.", file=sys.stderr)
     print("You MUST provide the 'iotc' python library or 'tutk-iotc' package.", file=sys.stderr)
@@ -21,6 +21,7 @@ except ImportError:
     def IOTC_Initialize2(port): return 0
     def IOTC_DeInitialize(): return 0
     def IOTC_Connect_ByUID_Parallel(uid, sid): return -1
+    def IOTC_Connect_ByUID(uid): return -1
     def avClientStart(sid, user, pwd, timeout, serv_type, channel): return -1
     def avSendIOCtrl(av_index, type, payload): pass
     def avRecvFrameData2(av_index, buf, size, out_buf_size, out_frame_size, out_frame_info, frame_idx, key_frame): return -1
@@ -43,7 +44,12 @@ def main():
         sys.exit(1)
 
     # 2. Connect to Device
-    sid = IOTC_Connect_ByUID_Parallel(uid, 0)
+    print(f"Trying IOTC_Connect_ByUID...", file=sys.stderr)
+    sid = IOTC_Connect_ByUID(uid)
+    if sid < 0:
+        print(f"IOTC_Connect_ByUID failed ({sid}). Trying Parallel...", file=sys.stderr)
+        sid = IOTC_Connect_ByUID_Parallel(uid, 0)
+    
     if sid < 0:
         print(f"Failed to connect to device. Error code: {sid}", file=sys.stderr)
         # Prevent tight loop restart by sleeping

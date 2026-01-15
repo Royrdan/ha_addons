@@ -28,9 +28,6 @@ if [ -z "$CAMERA_UID" ] || [ -z "$AUTH_KEY" ]; then
     exit 1
 fi
 
-echo "Running Library Tests..."
-python3 /test_libs.py "$CAMERA_UID"
-
 echo "Configuring go2rtc..."
 
 # Create debug wrapper
