@@ -167,7 +167,8 @@ def avRecvFrameData2(av_index, buf, size, out_buf_size, out_frame_size, out_fram
         c_frame_idx = ctypes.c_int(0)
         
         # Frame Info is a struct of size 24 usually. We pass a buffer.
-        c_frame_info = (ctypes.c_byte * 24)() 
+        # SAFEGUARD: Allocate 128 bytes to prevent overflow if struct is larger
+        c_frame_info = (ctypes.c_byte * 128)() 
         
         # Args
         fn.argtypes = [ctypes.c_int, ctypes.POINTER(ctypes.c_char), ctypes.c_int, 
@@ -176,7 +177,7 @@ def avRecvFrameData2(av_index, buf, size, out_buf_size, out_frame_size, out_fram
         fn.restype = ctypes.c_int
         
         ret = fn(av_index, c_buf, size, ctypes.byref(c_out_buf_size), ctypes.byref(c_out_frame_size),
-                 c_frame_info, 24, ctypes.byref(c_frame_idx))
+                 c_frame_info, 128, ctypes.byref(c_frame_idx))
         
         # Update python mutable args (lists)
         if out_buf_size: out_buf_size[0] = c_out_buf_size.value
