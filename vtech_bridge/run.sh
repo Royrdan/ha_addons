@@ -40,7 +40,8 @@ chmod +x /debug_wrapper.sh
 
 # Create debug log
 touch /var/log/bridge.err
-tail -F /var/log/bridge.err &
+touch /var/log/iotc_native.log
+tail -F /var/log/bridge.err /var/log/iotc_native.log &
 
 # Create go2rtc config
 cat > /tmp/go2rtc.yaml <<EOF

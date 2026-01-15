@@ -2,6 +2,7 @@ import sys
 import time
 import struct
 import argparse
+import signal
 
 # Ensure we can import from root if needed
 sys.path.append('/')
@@ -11,7 +12,7 @@ import vtech_stream_codes as vtech
 # Mock iotc for demonstration if not installed
 try:
     import iotc
-    from iotc import IOTC_Initialize2, IOTC_DeInitialize, IOTC_Connect_ByUID_Parallel, IOTC_Connect_ByUID, avClientStart, avSendIOCtrl, avRecvFrameData2, avInitialize, avDeInitialize
+    from iotc import IOTC_Initialize2, IOTC_DeInitialize, IOTC_Connect_ByUID_Parallel, IOTC_Connect_ByUID, avClientStart, avSendIOCtrl, avRecvFrameData2, avInitialize, avDeInitialize, IOTC_Set_Log_Attr
 except ImportError:
     print("CRITICAL ERROR: 'iotc' library not found.", file=sys.stderr)
     print("You MUST provide the 'iotc' python library or 'tutk-iotc' package.", file=sys.stderr)
@@ -27,6 +28,7 @@ except ImportError:
     def avClientStart(sid, user, pwd, timeout, serv_type, channel): return -1
     def avSendIOCtrl(av_index, type, payload): pass
     def avRecvFrameData2(av_index, buf, size, out_buf_size, out_frame_size, out_frame_info, frame_idx, key_frame): return -1
+    def IOTC_Set_Log_Attr(log_level, path): pass
 
 def main():
     parser = argparse.ArgumentParser(description="VTech Baby Monitor Bridge to RTSP/Stdout")
@@ -39,6 +41,14 @@ def main():
     
     print(f"Connecting to {uid}...", file=sys.stderr)
     
+    # 0. Enable Logging
+    try:
+        # Enable verbose logging to file
+        IOTC_Set_Log_Attr(255, "/var/log/iotc_native.log")
+        print("Enabled IOTC native logging to /var/log/iotc_native.log", file=sys.stderr)
+    except Exception as e:
+        print(f"Failed to set log attr: {e}", file=sys.stderr)
+
     # 1. Initialize IOTC (Platform dependent, often requires 0 or a specific port)
     init_ret = IOTC_Initialize2(0)
     if init_ret < 0:
@@ -50,19 +60,46 @@ def main():
     if av_ret < 0:
         print(f"Failed to initialize AV. Error code: {av_ret}", file=sys.stderr)
 
+    # Define timeout handler
+    def timeout_handler(signum, frame):
+        raise TimeoutError("IOTC Connect Timeout")
+    
+    signal.signal(signal.SIGALRM, timeout_handler)
+
     # 2. Connect to Device
-    print(f"Trying IOTC_Connect_ByUID...", file=sys.stderr)
+    print(f"Trying IOTC_Connect...", file=sys.stderr)
     sid = -1
-    for i in range(3):
-        sid = IOTC_Connect_ByUID(uid)
-        if sid >= 0:
-            break
-        print(f"IOTC_Connect_ByUID failed ({sid}). Retrying ({i+1}/3)...", file=sys.stderr)
-        time.sleep(1)
-        
-    if sid < 0:
-        print(f"IOTC_Connect_ByUID failed after retries. Trying Parallel...", file=sys.stderr)
+    
+    # Try Parallel First (usually more robust)
+    print(f"Trying IOTC_Connect_ByUID_Parallel...", file=sys.stderr)
+    try:
+        signal.alarm(10) # 10s timeout
         sid = IOTC_Connect_ByUID_Parallel(uid, 0)
+        signal.alarm(0)
+    except TimeoutError:
+        print("IOTC_Connect_ByUID_Parallel timed out.", file=sys.stderr)
+        sid = -1
+    except Exception as e:
+        print(f"IOTC_Connect_ByUID_Parallel error: {e}", file=sys.stderr)
+        sid = -1
+        signal.alarm(0)
+
+    # If Parallel failed, try sequential
+    if sid < 0:
+        print(f"Parallel failed ({sid}). Trying sequential IOTC_Connect_ByUID...", file=sys.stderr)
+        for i in range(3):
+            try:
+                signal.alarm(10)
+                sid = IOTC_Connect_ByUID(uid)
+                signal.alarm(0)
+            except TimeoutError:
+                 print(f"IOTC_Connect_ByUID attempt {i+1} timed out.", file=sys.stderr)
+                 sid = -1
+            
+            if sid >= 0:
+                break
+            print(f"IOTC_Connect_ByUID failed ({sid}). Retrying ({i+1}/3)...", file=sys.stderr)
+            time.sleep(1)
     
     if sid < 0:
         print(f"Failed to connect to device. Error code: {sid}", file=sys.stderr)

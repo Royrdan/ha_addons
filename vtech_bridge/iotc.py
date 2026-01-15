@@ -30,6 +30,27 @@ except OSError as e:
 # Define constants
 IOTC_ER_TIMEOUT = -20012
 
+class LogAttr(ctypes.Structure):
+    _fields_ = [("log_level", ctypes.c_int),
+                ("path", ctypes.c_char * 128)]
+
+def IOTC_Set_Log_Attr(log_level, path):
+    try:
+        fn = _lib.IOTC_Set_Log_Attr
+        fn.argtypes = [ctypes.POINTER(LogAttr)]
+        fn.restype = None
+        
+        log_attr = LogAttr()
+        log_attr.log_level = log_level
+        
+        if path:
+            encoded_path = path.encode('utf-8')
+            log_attr.path = encoded_path
+        
+        fn(ctypes.byref(log_attr))
+    except Exception as e:
+        print(f"IOTC_Set_Log_Attr error: {e}", file=sys.stderr)
+
 def IOTC_Get_Version():
     try:
         fn = _lib.IOTC_Get_Version
