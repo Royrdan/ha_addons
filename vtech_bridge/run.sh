@@ -1,4 +1,4 @@
-#!/usr/bin/with-contenv bashio
+#!/bin/bash
 
 echo "Starting VTech Bridge Add-on..."
 
@@ -12,11 +12,19 @@ ls -la /
 echo "-------------------"
 
 # Read config from Home Assistant options
-CAMERA_UID=$(bashio::config 'uid')
-AUTH_KEY=$(bashio::config 'auth_key')
+CONFIG_PATH="/data/options.json"
+
+if [ -f "$CONFIG_PATH" ]; then
+    CAMERA_UID=$(jq -r '.uid // empty' $CONFIG_PATH)
+    AUTH_KEY=$(jq -r '.auth_key // empty' $CONFIG_PATH)
+else
+    echo "Warning: /data/options.json not found. Using environment variables if available."
+    CAMERA_UID=${CAMERA_UID}
+    AUTH_KEY=${AUTH_KEY}
+fi
 
 if [ -z "$CAMERA_UID" ] || [ -z "$AUTH_KEY" ]; then
-    bashio::log.error "UID or Auth Key is missing! Please configure the add-on."
+    echo "ERROR: UID or Auth Key is missing! Please configure the add-on."
     exit 1
 fi
 
@@ -34,4 +42,4 @@ rtsp:
 EOF
 
 echo "Starting go2rtc..."
-go2rtc -config /tmp/go2rtc.yaml
+exec go2rtc -config /tmp/go2rtc.yaml

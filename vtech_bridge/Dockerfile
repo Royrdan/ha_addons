@@ -1,14 +1,10 @@
-ARG BUILD_FROM
-FROM $BUILD_FROM
+FROM python:3.12-slim-bookworm
 
 # Setup base
-RUN apk add --no-cache \
-    python3 \
-    py3-pip \
+RUN apt-get update && apt-get install -y \
     curl \
-    bind-tools \
-    gcompat \
-    libc6-compat
+    jq \
+    && rm -rf /var/lib/apt/lists/*
 
 # Install Go2RTC
 ARG BUILD_ARCH
@@ -22,8 +18,7 @@ RUN if [ "${BUILD_ARCH}" = "aarch64" ]; then \
     && chmod +x /usr/local/bin/go2rtc
 
 # Install Python dependencies
-# Attempt to install a common library, but users often need to provide their own IOTC wrapper
-RUN pip3 install --no-cache-dir requests --break-system-packages
+RUN pip3 install --no-cache-dir requests
 
 # Copy data
 COPY run.sh /
