@@ -18,6 +18,43 @@ except OSError as e:
 # Define constants
 IOTC_ER_TIMEOUT = -20012
 
+def IOTC_Get_Version():
+    try:
+        fn = _lib.IOTC_Get_Version
+        fn.argtypes = [ctypes.POINTER(ctypes.c_uint)]
+        fn.restype = None
+        
+        ver = ctypes.c_uint(0)
+        fn(ctypes.byref(ver))
+        
+        # Version is usually packed: Major.Minor.Build.Revision
+        # (ver >> 24) & 0xFF, (ver >> 16) & 0xFF, (ver >> 8) & 0xFF, ver & 0xFF
+        v = ver.value
+        return f"{(v >> 24) & 0xff}.{(v >> 16) & 0xff}.{(v >> 8) & 0xff}.{v & 0xff}"
+    except Exception as e:
+        print(f"IOTC_Get_Version error: {e}", file=sys.stderr)
+        return "Unknown"
+
+def IOTC_Initialize2(udp_port):
+    try:
+        fn = _lib.IOTC_Initialize2
+        fn.argtypes = [ctypes.c_ushort]
+        fn.restype = ctypes.c_int
+        return fn(udp_port)
+    except Exception as e:
+        print(f"IOTC_Initialize2 error: {e}", file=sys.stderr)
+        return -1
+
+def IOTC_DeInitialize():
+    try:
+        fn = _lib.IOTC_DeInitialize
+        fn.argtypes = []
+        fn.restype = ctypes.c_int
+        return fn()
+    except Exception as e:
+        print(f"IOTC_DeInitialize error: {e}", file=sys.stderr)
+        return -1
+
 def IOTC_Connect_ByUID_Parallel(uid, sid):
     try:
         fn = _lib.IOTC_Connect_ByUID_Parallel
@@ -27,6 +64,14 @@ def IOTC_Connect_ByUID_Parallel(uid, sid):
     except Exception as e:
         print(f"IOTC_Connect error: {e}", file=sys.stderr)
         return -1
+
+def IOTC_Session_Close(sid):
+    try:
+        fn = _lib.IOTC_Session_Close
+        fn.argtypes = [ctypes.c_int]
+        fn(sid)
+    except:
+        pass
 
 def avClientStart(sid, user, pwd, timeout, serv_type, channel):
     try:
@@ -40,6 +85,14 @@ def avClientStart(sid, user, pwd, timeout, serv_type, channel):
     except Exception as e:
         print(f"avClientStart error: {e}", file=sys.stderr)
         return -1
+
+def avClientStop(av_index):
+    try:
+        fn = _lib.avClientStop
+        fn.argtypes = [ctypes.c_int]
+        fn(av_index)
+    except:
+        pass
 
 def avSendIOCtrl(av_index, type, payload):
     try:
@@ -58,8 +111,6 @@ def avRecvFrameData2(av_index, buf, size, out_buf_size, out_frame_size, out_fram
     try:
         fn = _lib.avRecvFrameData2
         # int avRecvFrameData2(int avIndex, char *buf, int bufSize, int *outBufSize, int *outFrameSize, char *pFrameInfo, int frameInfoSize, int *outFrameIndex);
-        # Note: frameInfoSize is passed by value, not pointer, in some versions? Or pointer? 
-        # Usually: (int avIndex, char *buf, int bufSize, int *outBufSize, int *outFrameSize, FRAMEINFO_t *pFrameInfo, int frameInfoSize, int *outFrameIndex)
         
         # We need to handle 'buf' (bytearray) as mutable buffer.
         c_buf = (ctypes.c_char * len(buf)).from_buffer(buf)
@@ -69,10 +120,6 @@ def avRecvFrameData2(av_index, buf, size, out_buf_size, out_frame_size, out_fram
         c_frame_idx = ctypes.c_int(0)
         
         # Frame Info is a struct of size 24 usually. We pass a buffer.
-        # out_frame_info passed from python is [0]*10 (list of ints). We need to fill it? 
-        # bridge.py expects C-style pointer returns filling the lists.
-        
-        # Create a buffer for frame info
         c_frame_info = (ctypes.c_byte * 24)() 
         
         # Args
@@ -84,31 +131,17 @@ def avRecvFrameData2(av_index, buf, size, out_buf_size, out_frame_size, out_fram
         ret = fn(av_index, c_buf, size, ctypes.byref(c_out_buf_size), ctypes.byref(c_out_frame_size),
                  c_frame_info, 24, ctypes.byref(c_frame_idx))
         
-        # Update python mutable args
-        out_buf_size[0] = c_out_buf_size.value
-        out_frame_size[0] = c_out_frame_size.value
-        frame_idx[0] = c_frame_idx.value
-        # Key frame detection? 
-        # Usually byte 17 is keyframe flag? 
-        # For now ignore key_frame output update or guess.
+        # Update python mutable args (lists)
+        if out_buf_size: out_buf_size[0] = c_out_buf_size.value
+        if out_frame_size: out_frame_size[0] = c_out_frame_size.value
+        if frame_idx: frame_idx[0] = c_frame_idx.value
         
         return ret
     except Exception as e:
         print(f"avRecvFrameData2 error: {e}", file=sys.stderr)
         return -1
 
-def IOTC_Session_Close(sid):
-    try:
-        fn = _lib.IOTC_Session_Close
-        fn.argtypes = [ctypes.c_int]
-        fn(sid)
-    except:
-        pass
-
-def avClientStop(av_index):
-    try:
-        fn = _lib.avClientStop
-        fn.argtypes = [ctypes.c_int]
-        fn(av_index)
-    except:
-        pass
+if __name__ == "__main__":
+    print("Loading IOTC library...")
+    ver = IOTC_Get_Version()
+    print(f"IOTC Version: {ver}")
