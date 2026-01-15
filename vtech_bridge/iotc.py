@@ -31,8 +31,10 @@ except OSError as e:
 IOTC_ER_TIMEOUT = -20012
 
 class LogAttr(ctypes.Structure):
-    _fields_ = [("log_level", ctypes.c_int),
-                ("path", ctypes.c_char * 128)]
+    _fields_ = [("path", ctypes.c_char_p),
+                ("log_level", ctypes.c_int),
+                ("file_max_size", ctypes.c_int),
+                ("file_max_count", ctypes.c_int)]
 
 def IOTC_Set_Log_Attr(log_level, path):
     try:
@@ -41,15 +43,27 @@ def IOTC_Set_Log_Attr(log_level, path):
         fn.restype = None
         
         log_attr = LogAttr()
-        log_attr.log_level = log_level
         
         if path:
-            encoded_path = path.encode('utf-8')
-            log_attr.path = encoded_path
+            log_attr.path = path.encode('utf-8')
+        
+        log_attr.log_level = log_level
+        log_attr.file_max_size = 0
+        log_attr.file_max_count = 0
         
         fn(ctypes.byref(log_attr))
     except Exception as e:
         print(f"IOTC_Set_Log_Attr error: {e}", file=sys.stderr)
+
+def IOTC_Get_SessionID():
+    try:
+        fn = _lib.IOTC_Get_SessionID
+        fn.argtypes = []
+        fn.restype = ctypes.c_int
+        return fn()
+    except Exception as e:
+        print(f"IOTC_Get_SessionID error: {e}", file=sys.stderr)
+        return -1
 
 def IOTC_Get_Version():
     try:

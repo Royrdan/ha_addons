@@ -12,7 +12,7 @@ import vtech_stream_codes as vtech
 # Mock iotc for demonstration if not installed
 try:
     import iotc
-    from iotc import IOTC_Initialize2, IOTC_DeInitialize, IOTC_Connect_ByUID_Parallel, IOTC_Connect_ByUID, avClientStart, avSendIOCtrl, avRecvFrameData2, avInitialize, avDeInitialize, IOTC_Set_Log_Attr
+    from iotc import IOTC_Initialize2, IOTC_DeInitialize, IOTC_Connect_ByUID_Parallel, IOTC_Connect_ByUID, avClientStart, avSendIOCtrl, avRecvFrameData2, avInitialize, avDeInitialize, IOTC_Set_Log_Attr, IOTC_Get_SessionID
 except ImportError:
     print("CRITICAL ERROR: 'iotc' library not found.", file=sys.stderr)
     print("You MUST provide the 'iotc' python library or 'tutk-iotc' package.", file=sys.stderr)
@@ -29,6 +29,7 @@ except ImportError:
     def avSendIOCtrl(av_index, type, payload): pass
     def avRecvFrameData2(av_index, buf, size, out_buf_size, out_frame_size, out_frame_info, frame_idx, key_frame): return -1
     def IOTC_Set_Log_Attr(log_level, path): pass
+    def IOTC_Get_SessionID(): return -1
 
 def main():
     parser = argparse.ArgumentParser(description="VTech Baby Monitor Bridge to RTSP/Stdout")
@@ -73,9 +74,20 @@ def main():
     # Try Parallel First (usually more robust)
     print(f"Trying IOTC_Connect_ByUID_Parallel...", file=sys.stderr)
     try:
-        signal.alarm(10) # 10s timeout
-        sid = IOTC_Connect_ByUID_Parallel(uid, 0)
-        signal.alarm(0)
+        # Parallel requires a pre-allocated Session ID
+        sid = IOTC_Get_SessionID()
+        if sid < 0:
+            print(f"Failed to get Session ID: {sid}", file=sys.stderr)
+        else:
+            signal.alarm(10) # 10s timeout
+            sid_ret = IOTC_Connect_ByUID_Parallel(uid, sid)
+            signal.alarm(0)
+            
+            if sid_ret < 0:
+                print(f"IOTC_Connect_ByUID_Parallel failed: {sid_ret}", file=sys.stderr)
+                sid = -1
+            else:
+                sid = sid_ret
     except TimeoutError:
         print("IOTC_Connect_ByUID_Parallel timed out.", file=sys.stderr)
         sid = -1
