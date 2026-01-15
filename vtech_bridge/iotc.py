@@ -65,6 +65,16 @@ def IOTC_Get_SessionID():
         print(f"IOTC_Get_SessionID error: {e}", file=sys.stderr)
         return -1
 
+def TUTK_SDK_Set_Region(region_code):
+    try:
+        fn = _lib.TUTK_SDK_Set_Region
+        fn.argtypes = [ctypes.c_int]
+        fn.restype = ctypes.c_int
+        return fn(region_code)
+    except Exception as e:
+        print(f"TUTK_SDK_Set_Region error: {e}", file=sys.stderr)
+        return -1
+
 def IOTC_Get_Version():
     try:
         fn = _lib.IOTC_Get_Version
