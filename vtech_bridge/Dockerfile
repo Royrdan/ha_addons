@@ -6,7 +6,8 @@ RUN apk add --no-cache \
     python3 \
     py3-pip \
     curl \
-    bind-tools
+    bind-tools \
+    gcompat
 
 # Install Go2RTC
 ARG BUILD_ARCH
