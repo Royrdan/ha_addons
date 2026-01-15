@@ -15,7 +15,7 @@ import vtech_stream_codes as vtech
 # Mock iotc for demonstration if not installed
 try:
     import iotc
-    from iotc import IOTC_Initialize2, IOTC_DeInitialize, IOTC_Connect_ByUID_Parallel, IOTC_Connect_ByUID, avClientStart, avSendIOCtrl, avRecvFrameData2, avInitialize, avDeInitialize, IOTC_Set_Log_Attr, IOTC_Get_SessionID, TUTK_SDK_Set_Region, TUTK_SDK_Set_License_Key
+    from iotc import IOTC_Initialize2, IOTC_DeInitialize, IOTC_Connect_ByUID_Parallel, IOTC_Connect_ByUID, avClientStart, avClientStartEx, avSendIOCtrl, avRecvFrameData2, avInitialize, avDeInitialize, IOTC_Set_Log_Attr, IOTC_Get_SessionID, TUTK_SDK_Set_Region, TUTK_SDK_Set_License_Key
 except ImportError:
     print("CRITICAL ERROR: 'iotc' library not found.", file=sys.stderr)
     # Define mocks so the script structure is visible, but exit early if run
@@ -26,6 +26,7 @@ except ImportError:
     def avInitialize(max_channel_num): return 0
     def avDeInitialize(): return 0
     def avClientStart(sid, user, pwd, timeout, serv_type, channel): return -1
+    def avClientStartEx(sid, user, pwd, timeout, channel, resend=0, security_mode=0, auth_type=0): return -1
     def avSendIOCtrl(av_index, type, payload): pass
     def avRecvFrameData2(av_index, buf, size, out_buf_size, out_frame_size, out_frame_info, frame_idx, key_frame): return -1
     def IOTC_Set_Log_Attr(log_level, path): pass
@@ -141,9 +142,12 @@ def bridge_worker(uid, auth_key, region, method, status_queue):
     av_index = -1
     # Simple retry for AV start
     for i in range(3):
-        av_index = avClientStart(sid, "admin", auth_key, 30, 0, 0)
+        # Try avClientStartEx with DTLS (SecurityMode=2) as VTech uses it
+        print(f"[Worker] Starting AV Client (Attempt {i+1})...", file=sys.stderr)
+        av_index = avClientStartEx(sid, "admin", auth_key, 30, 0, resend=0, security_mode=2, auth_type=0)
         if av_index >= 0:
             break
+        print(f"[Worker] AV start failed: {av_index}. Retrying...", file=sys.stderr)
         time.sleep(1)
 
     if av_index < 0:

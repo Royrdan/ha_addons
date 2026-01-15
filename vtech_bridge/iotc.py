@@ -36,6 +36,30 @@ class LogAttr(ctypes.Structure):
                 ("file_max_size", ctypes.c_int),
                 ("file_max_count", ctypes.c_int)]
 
+class AVClientStartInConfig(ctypes.Structure):
+    _fields_ = [
+        ("cb", ctypes.c_uint32),
+        ("iotc_session_id", ctypes.c_uint32),
+        ("iotc_channel_id", ctypes.c_uint8),
+        ("timeout_sec", ctypes.c_uint32),
+        ("account_or_identity", ctypes.c_char_p),
+        ("password_or_token", ctypes.c_char_p),
+        ("resend", ctypes.c_int32),
+        ("security_mode", ctypes.c_uint32),
+        ("auth_type", ctypes.c_uint32),
+        ("sync_recv_data", ctypes.c_int32),
+    ]
+
+class AVClientStartOutConfig(ctypes.Structure):
+    _fields_ = [
+        ("cb", ctypes.c_uint32),
+        ("server_type", ctypes.c_uint32),
+        ("resend", ctypes.c_int32),
+        ("two_way_streaming", ctypes.c_int32),
+        ("sync_recv_data", ctypes.c_int32),
+        ("security_mode", ctypes.c_uint32),
+    ]
+
 def IOTC_Set_Log_Attr(log_level, path):
     try:
         fn = _lib.IOTC_Set_Log_Attr
@@ -189,6 +213,32 @@ def avClientStart(sid, user, pwd, timeout, serv_type, channel):
         return fn(sid, user.encode('utf-8'), pwd.encode('utf-8'), timeout, ctypes.byref(serv_type_ref), channel)
     except Exception as e:
         print(f"avClientStart error: {e}", file=sys.stderr)
+        return -1
+
+def avClientStartEx(sid, user, pwd, timeout, channel, resend=0, security_mode=0, auth_type=0):
+    try:
+        fn = _av_lib.avClientStartEx
+        fn.argtypes = [ctypes.POINTER(AVClientStartInConfig), ctypes.POINTER(AVClientStartOutConfig)]
+        fn.restype = ctypes.c_int
+        
+        avc_in = AVClientStartInConfig()
+        avc_in.cb = ctypes.sizeof(avc_in)
+        avc_in.iotc_session_id = sid
+        avc_in.iotc_channel_id = channel
+        avc_in.timeout_sec = timeout
+        avc_in.account_or_identity = user.encode('utf-8')
+        avc_in.password_or_token = pwd.encode('utf-8')
+        avc_in.resend = resend
+        avc_in.security_mode = security_mode
+        avc_in.auth_type = auth_type
+        avc_in.sync_recv_data = 1
+
+        avc_out = AVClientStartOutConfig()
+        avc_out.cb = ctypes.sizeof(avc_out)
+        
+        return fn(ctypes.byref(avc_in), ctypes.byref(avc_out))
+    except Exception as e:
+        print(f"avClientStartEx error: {e}", file=sys.stderr)
         return -1
 
 def avClientStop(av_index):
