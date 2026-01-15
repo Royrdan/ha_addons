@@ -2,7 +2,7 @@ import ctypes
 import os
 import sys
 
-# Load Library
+# Load IOTC Library
 # Try /usr/lib first (where Dockerfile will put it)
 lib_path = "/usr/lib/libIOTCAPIs.so"
 if not os.path.exists(lib_path):
@@ -13,6 +13,17 @@ try:
     _lib = ctypes.CDLL(lib_path)
 except OSError as e:
     print(f"Failed to load library {lib_path}: {e}", file=sys.stderr)
+    raise
+
+# Load AV Library
+av_lib_path = "/usr/lib/libAVAPIs.so"
+if not os.path.exists(av_lib_path):
+    av_lib_path = os.path.join(os.path.dirname(__file__), "libAVAPIs.so")
+
+try:
+    _av_lib = ctypes.CDLL(av_lib_path)
+except OSError as e:
+    print(f"Failed to load AV library {av_lib_path}: {e}", file=sys.stderr)
     raise
 
 # Define constants
@@ -83,9 +94,34 @@ def IOTC_Session_Close(sid):
     except:
         pass
 
+def avInitialize(max_channel_num):
+    try:
+        fn = _av_lib.avInitialize
+        fn.argtypes = [ctypes.c_int]
+        fn.restype = ctypes.c_int
+        return fn(max_channel_num)
+    except AttributeError:
+        # Function might not exist in some versions or variants
+        return 0
+    except Exception as e:
+        print(f"avInitialize error: {e}", file=sys.stderr)
+        return -1
+
+def avDeInitialize():
+    try:
+        fn = _av_lib.avDeInitialize
+        fn.argtypes = []
+        fn.restype = ctypes.c_int
+        return fn()
+    except AttributeError:
+        return 0
+    except Exception as e:
+        print(f"avDeInitialize error: {e}", file=sys.stderr)
+        return -1
+
 def avClientStart(sid, user, pwd, timeout, serv_type, channel):
     try:
-        fn = _lib.avClientStart
+        fn = _av_lib.avClientStart
         # int avClientStart(int SID, const char *account, const char *password, unsigned int timeout, unsigned int *servType, unsigned int channel)
         fn.argtypes = [ctypes.c_int, ctypes.c_char_p, ctypes.c_char_p, ctypes.c_uint, ctypes.POINTER(ctypes.c_uint), ctypes.c_uint]
         fn.restype = ctypes.c_int
@@ -98,7 +134,7 @@ def avClientStart(sid, user, pwd, timeout, serv_type, channel):
 
 def avClientStop(av_index):
     try:
-        fn = _lib.avClientStop
+        fn = _av_lib.avClientStop
         fn.argtypes = [ctypes.c_int]
         fn(av_index)
     except:
@@ -106,7 +142,7 @@ def avClientStop(av_index):
 
 def avSendIOCtrl(av_index, type, payload):
     try:
-        fn = _lib.avSendIOCtrl
+        fn = _av_lib.avSendIOCtrl
         # int avSendIOCtrl(int avIndex, unsigned int ioCtrlType, const char *data, int dataSize);
         fn.argtypes = [ctypes.c_int, ctypes.c_uint, ctypes.c_char_p, ctypes.c_int]
         fn.restype = ctypes.c_int
@@ -119,7 +155,7 @@ def avSendIOCtrl(av_index, type, payload):
 
 def avRecvFrameData2(av_index, buf, size, out_buf_size, out_frame_size, out_frame_info, frame_idx, key_frame):
     try:
-        fn = _lib.avRecvFrameData2
+        fn = _av_lib.avRecvFrameData2
         # int avRecvFrameData2(int avIndex, char *buf, int bufSize, int *outBufSize, int *outFrameSize, char *pFrameInfo, int frameInfoSize, int *outFrameIndex);
         
         # We need to handle 'buf' (bytearray) as mutable buffer.

@@ -11,7 +11,7 @@ import vtech_stream_codes as vtech
 # Mock iotc for demonstration if not installed
 try:
     import iotc
-    from iotc import IOTC_Initialize2, IOTC_DeInitialize, IOTC_Connect_ByUID_Parallel, IOTC_Connect_ByUID, avClientStart, avSendIOCtrl, avRecvFrameData2
+    from iotc import IOTC_Initialize2, IOTC_DeInitialize, IOTC_Connect_ByUID_Parallel, IOTC_Connect_ByUID, avClientStart, avSendIOCtrl, avRecvFrameData2, avInitialize, avDeInitialize
 except ImportError:
     print("CRITICAL ERROR: 'iotc' library not found.", file=sys.stderr)
     print("You MUST provide the 'iotc' python library or 'tutk-iotc' package.", file=sys.stderr)
@@ -22,6 +22,8 @@ except ImportError:
     def IOTC_DeInitialize(): return 0
     def IOTC_Connect_ByUID_Parallel(uid, sid): return -1
     def IOTC_Connect_ByUID(uid): return -1
+    def avInitialize(max_channel_num): return 0
+    def avDeInitialize(): return 0
     def avClientStart(sid, user, pwd, timeout, serv_type, channel): return -1
     def avSendIOCtrl(av_index, type, payload): pass
     def avRecvFrameData2(av_index, buf, size, out_buf_size, out_frame_size, out_frame_info, frame_idx, key_frame): return -1
@@ -42,6 +44,11 @@ def main():
     if init_ret < 0:
         print(f"Failed to initialize IOTC. Error code: {init_ret}", file=sys.stderr)
         sys.exit(1)
+    
+    # Initialize AV
+    av_ret = avInitialize(0)
+    if av_ret < 0:
+        print(f"Failed to initialize AV. Error code: {av_ret}", file=sys.stderr)
 
     # 2. Connect to Device
     print(f"Trying IOTC_Connect_ByUID...", file=sys.stderr)
@@ -113,6 +120,7 @@ def main():
         vtech.stop_stream(sid, av_index, 0)
         iotc.avClientStop(av_index)
         iotc.IOTC_Session_Close(sid)
+        avDeInitialize()
         IOTC_DeInitialize()
 
 if __name__ == "__main__":
