@@ -5,6 +5,7 @@ import argparse
 import signal
 import json
 import os
+import multiprocessing
 
 # Ensure we can import from root if needed
 sys.path.append('/')
@@ -17,9 +18,6 @@ try:
     from iotc import IOTC_Initialize2, IOTC_DeInitialize, IOTC_Connect_ByUID_Parallel, IOTC_Connect_ByUID, avClientStart, avSendIOCtrl, avRecvFrameData2, avInitialize, avDeInitialize, IOTC_Set_Log_Attr, IOTC_Get_SessionID, TUTK_SDK_Set_Region
 except ImportError:
     print("CRITICAL ERROR: 'iotc' library not found.", file=sys.stderr)
-    print("You MUST provide the 'iotc' python library or 'tutk-iotc' package.", file=sys.stderr)
-    print("If you have the .so/.dll and python wrapper, ensure they are in the container.", file=sys.stderr)
-    
     # Define mocks so the script structure is visible, but exit early if run
     def IOTC_Initialize2(port): return 0
     def IOTC_DeInitialize(): return 0
@@ -62,26 +60,139 @@ def save_state(state):
     except:
         pass
 
+def bridge_worker(uid, auth_key, region, method, status_queue):
+    """
+    Runs the actual bridge logic in a separate process.
+    """
+    print(f"[Worker] Starting. Region={region}, Method={method}", file=sys.stderr)
+    
+    # 0. Enable Logging
+    try:
+        IOTC_Set_Log_Attr(255, "/var/log/iotc_native.log")
+        print("[Worker] Enabled IOTC native logging", file=sys.stderr)
+    except Exception as e:
+        print(f"[Worker] Failed to set log attr: {e}", file=sys.stderr)
+
+    # 0.5 Set Region
+    try:
+        TUTK_SDK_Set_Region(region)
+        print(f"[Worker] Set Region: {region}", file=sys.stderr)
+    except Exception as e:
+        print(f"[Worker] Failed to set region: {e}", file=sys.stderr)
+
+    # 1. Initialize IOTC
+    init_ret = IOTC_Initialize2(0)
+    if init_ret < 0:
+        print(f"[Worker] Failed to initialize IOTC: {init_ret}", file=sys.stderr)
+        return
+    
+    # Initialize AV
+    av_ret = avInitialize(0)
+    if av_ret < 0:
+        print(f"[Worker] Failed to initialize AV: {av_ret}", file=sys.stderr)
+
+    # 2. Connect
+    sid = -1
+    print(f"[Worker] Connecting...", file=sys.stderr)
+    
+    if method == "parallel":
+        try:
+            sid_pre = IOTC_Get_SessionID()
+            if sid_pre < 0:
+                print(f"[Worker] Failed to get Session ID: {sid_pre}", file=sys.stderr)
+            else:
+                sid_ret = IOTC_Connect_ByUID_Parallel(uid, sid_pre)
+                if sid_ret < 0:
+                    print(f"[Worker] Parallel connect failed: {sid_ret}", file=sys.stderr)
+                else:
+                    sid = sid_ret
+        except Exception as e:
+            print(f"[Worker] Parallel exception: {e}", file=sys.stderr)
+    else: # sequential
+        try:
+            sid = IOTC_Connect_ByUID(uid)
+            if sid < 0:
+                print(f"[Worker] Sequential connect failed: {sid}", file=sys.stderr)
+        except Exception as e:
+            print(f"[Worker] Sequential exception: {e}", file=sys.stderr)
+
+    if sid < 0:
+        print("[Worker] Connection failed.", file=sys.stderr)
+        return
+
+    print(f"[Worker] Connected! SID: {sid}", file=sys.stderr)
+    
+    # Notify Main Process of success
+    status_queue.put("CONNECTED")
+
+    # 3. Start AV Client
+    av_index = -1
+    # Simple retry for AV start
+    for i in range(3):
+        av_index = avClientStart(sid, "admin", auth_key, 30, 0, 0)
+        if av_index >= 0:
+            break
+        time.sleep(1)
+
+    if av_index < 0:
+        print(f"[Worker] Failed to start AV client: {av_index}", file=sys.stderr)
+        iotc.IOTC_Session_Close(sid)
+        return
+
+    print(f"[Worker] AV Client Started. AVIndex: {av_index}", file=sys.stderr)
+
+    # 4. Start Stream
+    vtech.start_stream(sid, av_index, 0)
+    
+    # 5. Receive Loop
+    buf = bytearray(1024 * 1024) # 1MB buffer
+    print("[Worker] Stream started. Outputting video...", file=sys.stderr)
+    
+    try:
+        while True:
+            out_buf_size = [0]
+            out_frame_size = [0]
+            out_frame_info = [0] * 10
+            frame_idx = [0]
+            key_frame = [0]
+            
+            ret = avRecvFrameData2(av_index, buf, len(buf), out_buf_size, out_frame_size, out_frame_info, frame_idx, key_frame)
+            
+            if ret > 0:
+                frame_data = buf[:ret] 
+                sys.stdout.buffer.write(frame_data)
+                sys.stdout.flush()
+            elif ret == -20012: # IOTC_ER_TIMEOUT
+                continue
+            elif ret < 0:
+                print(f"[Worker] Error receiving frame: {ret}", file=sys.stderr)
+                break
+                
+    except KeyboardInterrupt:
+        pass
+    finally:
+        vtech.stop_stream(sid, av_index, 0)
+        iotc.avClientStop(av_index)
+        iotc.IOTC_Session_Close(sid)
+        avDeInitialize()
+        IOTC_DeInitialize()
+
 def main():
-    parser = argparse.ArgumentParser(description="VTech Baby Monitor Bridge to RTSP/Stdout")
+    parser = argparse.ArgumentParser(description="VTech Baby Monitor Bridge Smart Tester")
     parser.add_argument("--uid", required=True, help="Camera UID")
     parser.add_argument("--auth_key", required=True, help="Camera Auth Key")
     args = parser.parse_args()
 
-    uid = args.uid
-    auth_key = args.auth_key 
-    
     # --- SMART STRATEGY SELECTION ---
     state = load_state()
     idx = state.get("index", 0)
     
-    # If last run crashed (status is "pending"), increment strategy
+    # If last run crashed/hung (status pending), move to next
     if state.get("status") == "pending":
-        print(f"Previous strategy {idx} failed/crashed. Trying next...", file=sys.stderr)
+        print(f"Previous strategy {idx} failed. Moving to next...", file=sys.stderr)
         idx = (idx + 1) % len(STRATEGIES)
         state["index"] = idx
     
-    # Limit bounds
     if idx >= len(STRATEGIES):
         idx = 0
         state["index"] = 0
@@ -89,170 +200,37 @@ def main():
     current_strategy = STRATEGIES[idx]
     print(f"--- STRATEGY {idx+1}/{len(STRATEGIES)}: {current_strategy['name']} ---", file=sys.stderr)
     
-    # Persist pending state
     state["status"] = "pending"
     save_state(state)
     
-    # Apply Settings
-    region = current_strategy["region"]
-    method = current_strategy["method"]
+    # Run Worker
+    queue = multiprocessing.Queue()
+    p = multiprocessing.Process(target=bridge_worker, args=(args.uid, args.auth_key, current_strategy["region"], current_strategy["method"], queue))
+    p.start()
     
-    print(f"Connecting to {uid}...", file=sys.stderr)
-    
-    # 0. Enable Logging
+    # Wait for connection success
     try:
-        IOTC_Set_Log_Attr(255, "/var/log/iotc_native.log")
-        print("Enabled IOTC native logging to /var/log/iotc_native.log", file=sys.stderr)
-    except Exception as e:
-        print(f"Failed to set log attr: {e}", file=sys.stderr)
-
-    # 0.5 Set Region
-    try:
-        TUTK_SDK_Set_Region(region)
-        print(f"Set Region: {region}", file=sys.stderr)
-    except Exception as e:
-        print(f"Failed to set region: {e}", file=sys.stderr)
-
-    # 1. Initialize IOTC
-    init_ret = IOTC_Initialize2(0)
-    if init_ret < 0:
-        print(f"Failed to initialize IOTC. Error code: {init_ret}", file=sys.stderr)
-        sys.exit(1)
-    
-    # Initialize AV
-    av_ret = avInitialize(0)
-    if av_ret < 0:
-        print(f"Failed to initialize AV. Error code: {av_ret}", file=sys.stderr)
-
-    # Define timeout handler
-    def timeout_handler(signum, frame):
-        raise TimeoutError("IOTC Connect Timeout")
-    
-    signal.signal(signal.SIGALRM, timeout_handler)
-
-    # 2. Connect to Device
-    sid = -1
-    
-    if method == "parallel":
-        print(f"Trying IOTC_Connect_ByUID_Parallel...", file=sys.stderr)
-        try:
-            # Parallel requires a pre-allocated Session ID
-            sid_pre = IOTC_Get_SessionID()
-            if sid_pre < 0:
-                print(f"Failed to get Session ID: {sid_pre}", file=sys.stderr)
-            else:
-                signal.alarm(10) # 10s timeout
-                sid_ret = IOTC_Connect_ByUID_Parallel(uid, sid_pre)
-                signal.alarm(0)
-                
-                if sid_ret < 0:
-                    print(f"IOTC_Connect_ByUID_Parallel failed: {sid_ret}", file=sys.stderr)
-                    sid = -1
-                else:
-                    sid = sid_ret
-        except TimeoutError:
-            print("IOTC_Connect_ByUID_Parallel timed out.", file=sys.stderr)
-            sid = -1
-        except Exception as e:
-            print(f"IOTC_Connect_ByUID_Parallel error: {e}", file=sys.stderr)
-            sid = -1
-            signal.alarm(0)
+        msg = queue.get(timeout=15) # Wait 15s for connection
+        if msg == "CONNECTED":
+            print("Strategy Successful! Marking state as connected.", file=sys.stderr)
+            state["status"] = "connected"
+            save_state(state)
             
-    else: # sequential
-        print(f"Trying IOTC_Connect_ByUID (Sequential)...", file=sys.stderr)
-        for i in range(3):
-            try:
-                signal.alarm(10)
-                sid = IOTC_Connect_ByUID(uid)
-                signal.alarm(0)
-            except TimeoutError:
-                    print(f"IOTC_Connect_ByUID attempt {i+1} timed out.", file=sys.stderr)
-                    sid = -1
-            except Exception as e:
-                    print(f"IOTC_Connect_ByUID error: {e}", file=sys.stderr)
-                    sid = -1
-            
-            if sid >= 0:
-                break
-            print(f"IOTC_Connect_ByUID failed ({sid}). Retrying ({i+1}/3)...", file=sys.stderr)
-            time.sleep(1)
-    
-    if sid < 0:
-        print(f"Failed to connect to device. Error code: {sid}", file=sys.stderr)
-        # We don't mark success, so next run will try next strategy
-        time.sleep(5)
-        sys.exit(1)
-
-    print(f"Connected. SID: {sid}", file=sys.stderr)
-    
-    # IF WE REACH HERE, STRATEGY WORKED!
-    state["status"] = "connected"
-    save_state(state)
-
-    # 3. Start AV Client
-    # Channel 0 is standard. 
-    # Account/Password is often "admin" and the AuthKey, or just AuthKey.
-    av_index = -1
-    for i in range(3):
-        av_index = avClientStart(sid, "admin", auth_key, 30, 0, 0)
-        if av_index >= 0:
-            break
-        print(f"avClientStart failed ({av_index}). Retrying ({i+1}/3)...", file=sys.stderr)
-        time.sleep(1)
-
-    if av_index < 0:
-        print(f"Failed to start AV client. Error code: {av_index}", file=sys.stderr)
-        iotc.IOTC_Session_Close(sid)
-        time.sleep(5)
-        sys.exit(1)
-
-    print(f"AV Client Started. AVIndex: {av_index}", file=sys.stderr)
-
-    # 4. Send Start Stream Command
-    payload = vtech.create_start_stream_payload(0)
-    vtech.start_stream(sid, av_index, 0)
-    
-    # 5. Receive Loop
-    # Buffer for video data
-    buf = bytearray(1024 * 1024) # 1MB buffer
-    
-    print("Stream started. Outputting raw H.264 to stdout...", file=sys.stderr)
-    
-    try:
-        while True:
-            # Mock variables for C-style pointer returns
-            out_buf_size = [0]
-            out_frame_size = [0]
-            out_frame_info = [0] * 10 # SFrameInfo struct
-            frame_idx = [0]
-            key_frame = [0]
-            
-            ret = avRecvFrameData2(av_index, buf, len(buf), out_buf_size, out_frame_size, out_frame_info, frame_idx, key_frame)
-            
-            if ret > 0:
-                # Success, write raw frame to stdout
-                # We need to extract the exact bytes. 
-                # Assuming 'ret' is the number of bytes read or 'out_frame_size[0]' is.
-                frame_data = buf[:ret] 
-                
-                # Write binary data to stdout
-                sys.stdout.buffer.write(frame_data)
-                sys.stdout.flush()
-                
-            elif ret == -20012: # IOTC_ER_TIMEOUT
-                continue
-            elif ret < 0:
-                print(f"Error receiving frame: {ret}", file=sys.stderr)
-                break
-                
+            # Wait for worker to finish (forever)
+            p.join()
+            sys.exit(0)
+    except multiprocessing.queues.Empty:
+        print("Connection timed out (Hard Hang). Killing worker...", file=sys.stderr)
+        p.terminate()
+        p.join()
+        sys.exit(1) # Exit to restart with next strategy
     except KeyboardInterrupt:
-        print("Stopping...", file=sys.stderr)
-    finally:
-        vtech.stop_stream(sid, av_index, 0)
-        iotc.avClientStop(av_index)
-        iotc.IOTC_Session_Close(sid)
-        avDeInitialize()
-        IOTC_DeInitialize()
+        p.terminate()
+        sys.exit(0)
+    
+    # If worker exited early without success
+    print("Worker exited early.", file=sys.stderr)
+    sys.exit(1)
 
 if __name__ == "__main__":
     main()
