@@ -1,6 +1,6 @@
 {
   "name": "VTech Baby Monitor Bridge",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "slug": "vtech_bridge",
   "description": "Bridge VTech P2P Camera to RTSP using TUTK IOTC",
   "url": "https://github.com/Royrdan/ha_addons",

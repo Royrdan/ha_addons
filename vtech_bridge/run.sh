@@ -6,7 +6,7 @@ echo "Starting VTech Bridge Add-on..."
 echo "--- DIAGNOSTICS ---"
 python3 --version
 echo "Checking IOTC library..."
-python3 -c "try: import iotc; print('IOTC Library: Found'); except ImportError: print('IOTC Library: MISSING')"
+python3 -c "import importlib.util; print('IOTC Library: Found' if importlib.util.find_spec('iotc') else 'IOTC Library: MISSING')"
 echo "Listing root directory:"
 ls -la /
 echo "-------------------"
