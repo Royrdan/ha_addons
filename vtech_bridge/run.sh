@@ -29,10 +29,14 @@ if [ -z "$CAMERA_UID" ] || [ -z "$AUTH_KEY" ]; then
 fi
 
 echo "Configuring go2rtc..."
+# Create debug log
+touch /var/log/bridge.err
+tail -F /var/log/bridge.err &
+
 # Create go2rtc config
 cat > /tmp/go2rtc.yaml <<EOF
 streams:
-  baby_monitor: exec:python3 -u /bridge.py --uid "$CAMERA_UID" --auth_key "$AUTH_KEY"
+  baby_monitor: exec:python3 -u /bridge.py --uid "$CAMERA_UID" --auth_key "$AUTH_KEY" 2> /var/log/bridge.err
   
 api:
   listen: ":1984"
