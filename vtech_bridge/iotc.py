@@ -170,19 +170,24 @@ def avRecvFrameData2(av_index, buf, size, out_buf_size, out_frame_size, out_fram
         # SAFEGUARD: Allocate 128 bytes to prevent overflow if struct is larger
         c_frame_info = (ctypes.c_byte * 128)() 
         
-        # Args
+        # Args - Try 9 args (including keyFrame pointer)
         fn.argtypes = [ctypes.c_int, ctypes.POINTER(ctypes.c_char), ctypes.c_int, 
                        ctypes.POINTER(ctypes.c_int), ctypes.POINTER(ctypes.c_int),
-                       ctypes.POINTER(ctypes.c_byte), ctypes.c_int, ctypes.POINTER(ctypes.c_int)]
+                       ctypes.POINTER(ctypes.c_byte), ctypes.c_int, ctypes.POINTER(ctypes.c_int),
+                       ctypes.POINTER(ctypes.c_int)]
         fn.restype = ctypes.c_int
         
-        print(f"DEBUG: Calling avRecvFrameData2(idx={av_index}, buf_len={size})...", file=sys.stderr)
+        c_key_frame = ctypes.c_int(0)
+
+        print(f"DEBUG: Calling avRecvFrameData2(idx={av_index}, buf_len={size}) with 9 args...", file=sys.stderr)
         sys.stderr.flush()
 
         ret = fn(av_index, c_buf, size, ctypes.byref(c_out_buf_size), ctypes.byref(c_out_frame_size),
-                 c_frame_info, 128, ctypes.byref(c_frame_idx))
+                 c_frame_info, 128, ctypes.byref(c_frame_idx), ctypes.byref(c_key_frame))
         
         print(f"DEBUG: avRecvFrameData2 returned {ret}", file=sys.stderr)
+        
+        if key_frame: key_frame[0] = c_key_frame.value
         sys.stderr.flush()
 
         # Update python mutable args (lists)
