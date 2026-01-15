@@ -43,12 +43,13 @@ def main():
     print(f"Connecting to {uid}...", file=sys.stderr)
     
     # 0. Enable Logging
-    try:
-        # Enable verbose logging to file
-        IOTC_Set_Log_Attr(255, "/var/log/iotc_native.log")
-        print("Enabled IOTC native logging to /var/log/iotc_native.log", file=sys.stderr)
-    except Exception as e:
-        print(f"Failed to set log attr: {e}", file=sys.stderr)
+    # DISABLE LOGGING FOR STABILITY
+    # try:
+    #     # Enable verbose logging to file
+    #     IOTC_Set_Log_Attr(255, "/var/log/iotc_native.log")
+    #     print("Enabled IOTC native logging to /var/log/iotc_native.log", file=sys.stderr)
+    # except Exception as e:
+    #     print(f"Failed to set log attr: {e}", file=sys.stderr)
 
     # 1. Initialize IOTC (Platform dependent, often requires 0 or a specific port)
     init_ret = IOTC_Initialize2(0)
@@ -68,50 +69,26 @@ def main():
     signal.signal(signal.SIGALRM, timeout_handler)
 
     # 2. Connect to Device
-    print(f"Trying IOTC_Connect...", file=sys.stderr)
+    print(f"Trying IOTC_Connect_ByUID (Sequential)...", file=sys.stderr)
     sid = -1
     
-    # Try Parallel First (usually more robust)
-    print(f"Trying IOTC_Connect_ByUID_Parallel...", file=sys.stderr)
-    try:
-        # Parallel requires a pre-allocated Session ID
-        sid = IOTC_Get_SessionID()
-        if sid < 0:
-            print(f"Failed to get Session ID: {sid}", file=sys.stderr)
-        else:
-            signal.alarm(10) # 10s timeout
-            sid_ret = IOTC_Connect_ByUID_Parallel(uid, sid)
+    # Try Sequential with Timeout
+    for i in range(3):
+        try:
+            signal.alarm(10)
+            sid = IOTC_Connect_ByUID(uid)
             signal.alarm(0)
-            
-            if sid_ret < 0:
-                print(f"IOTC_Connect_ByUID_Parallel failed: {sid_ret}", file=sys.stderr)
+        except TimeoutError:
+                print(f"IOTC_Connect_ByUID attempt {i+1} timed out.", file=sys.stderr)
                 sid = -1
-            else:
-                sid = sid_ret
-    except TimeoutError:
-        print("IOTC_Connect_ByUID_Parallel timed out.", file=sys.stderr)
-        sid = -1
-    except Exception as e:
-        print(f"IOTC_Connect_ByUID_Parallel error: {e}", file=sys.stderr)
-        sid = -1
-        signal.alarm(0)
-
-    # If Parallel failed, try sequential
-    if sid < 0:
-        print(f"Parallel failed ({sid}). Trying sequential IOTC_Connect_ByUID...", file=sys.stderr)
-        for i in range(3):
-            try:
-                signal.alarm(10)
-                sid = IOTC_Connect_ByUID(uid)
-                signal.alarm(0)
-            except TimeoutError:
-                 print(f"IOTC_Connect_ByUID attempt {i+1} timed out.", file=sys.stderr)
-                 sid = -1
-            
-            if sid >= 0:
-                break
-            print(f"IOTC_Connect_ByUID failed ({sid}). Retrying ({i+1}/3)...", file=sys.stderr)
-            time.sleep(1)
+        except Exception as e:
+                print(f"IOTC_Connect_ByUID error: {e}", file=sys.stderr)
+                sid = -1
+        
+        if sid >= 0:
+            break
+        print(f"IOTC_Connect_ByUID failed ({sid}). Retrying ({i+1}/3)...", file=sys.stderr)
+        time.sleep(1)
     
     if sid < 0:
         print(f"Failed to connect to device. Error code: {sid}", file=sys.stderr)
