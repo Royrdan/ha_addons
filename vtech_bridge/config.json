@@ -1,0 +1,27 @@
+{
+  "name": "VTech Baby Monitor Bridge",
+  "version": "1.0.0",
+  "slug": "vtech_bridge",
+  "description": "Bridge VTech P2P Camera to RTSP using TUTK IOTC",
+  "url": "https://github.com/royrdan/vtech-ha-addon",
+  "startup": "services",
+  "arch": ["aarch64", "amd64", "armv7"],
+  "options": {
+    "uid": "",
+    "auth_key": ""
+  },
+  "schema": {
+    "uid": "str",
+    "auth_key": "str"
+  },
+  "ports": {
+    "8554/tcp": 8554,
+    "1984/tcp": 1984
+  },
+  "ports_description": {
+    "8554/tcp": "RTSP Stream",
+    "1984/tcp": "Go2RTC Web Interface"
+  },
+  "map": ["config:rw"],
+  "init": false
+}
