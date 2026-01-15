@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "slug": "vtech_bridge",
   "description": "Bridge VTech P2P Camera to RTSP using TUTK IOTC",
-  "url": "https://github.com/royrdan/vtech-ha-addon",
+  "url": "https://github.com/Royrdan/ha_addons",
   "startup": "services",
   "arch": ["aarch64", "amd64", "armv7"],
   "options": {
