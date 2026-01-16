@@ -108,7 +108,11 @@ def bridge_worker(uid, auth_key, region, method, status_queue):
     sid = -1
     print(f"[Worker] Connecting...", file=sys.stderr)
     
-    if method == "parallel":
+    # Check if IOTC_Connect_ByUIDEx is available (via imports in bridge.py if updated, 
+    # but bridge.py only imports what we listed. We need to update imports or access via iotc module)
+    has_ex = hasattr(iotc, 'IOTC_Connect_ByUIDEx')
+
+    if method == "parallel" and not has_ex: # Only use parallel if Ex is not preferred or available?
         try:
             sid_pre = IOTC_Get_SessionID()
             if sid_pre < 0:
@@ -121,13 +125,24 @@ def bridge_worker(uid, auth_key, region, method, status_queue):
                     sid = sid_ret
         except Exception as e:
             print(f"[Worker] Parallel exception: {e}", file=sys.stderr)
-    else: # sequential
-        try:
-            sid = IOTC_Connect_ByUID(uid)
-            if sid < 0:
-                print(f"[Worker] Sequential connect failed: {sid}", file=sys.stderr)
-        except Exception as e:
-            print(f"[Worker] Sequential exception: {e}", file=sys.stderr)
+    else: 
+        # Prefer Ex if available, as VTech DTLS likely requires auth_key during connection
+        if has_ex:
+            try:
+                print(f"[Worker] Using IOTC_Connect_ByUIDEx with auth_key...", file=sys.stderr)
+                sid_pre = IOTC_Get_SessionID()
+                sid = iotc.IOTC_Connect_ByUIDEx(uid, sid_pre, auth_key)
+                if sid < 0:
+                    print(f"[Worker] ConnectEx failed: {sid}", file=sys.stderr)
+            except Exception as e:
+                print(f"[Worker] ConnectEx exception: {e}", file=sys.stderr)
+        else:
+            try:
+                sid = IOTC_Connect_ByUID(uid)
+                if sid < 0:
+                    print(f"[Worker] Sequential connect failed: {sid}", file=sys.stderr)
+            except Exception as e:
+                print(f"[Worker] Sequential exception: {e}", file=sys.stderr)
 
     if sid < 0:
         print("[Worker] Connection failed.", file=sys.stderr)
@@ -144,7 +159,8 @@ def bridge_worker(uid, auth_key, region, method, status_queue):
     for i in range(3):
         # Try avClientStartEx with DTLS (SecurityMode=2) as VTech uses it
         print(f"[Worker] Starting AV Client (Attempt {i+1})...", file=sys.stderr)
-        av_index = avClientStartEx(sid, "admin", auth_key, 30, 0, resend=0, security_mode=2, auth_type=0)
+        # Using resend=1 as Wyze does
+        av_index = avClientStartEx(sid, "admin", auth_key, 30, 0, resend=1, security_mode=2, auth_type=0)
         if av_index >= 0:
             break
         print(f"[Worker] AV start failed: {av_index}. Retrying...", file=sys.stderr)

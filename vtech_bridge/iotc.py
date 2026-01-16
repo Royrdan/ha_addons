@@ -60,6 +60,14 @@ class AVClientStartOutConfig(ctypes.Structure):
         ("security_mode", ctypes.c_uint32),
     ]
 
+class St_IOTCConnectInput(ctypes.Structure):
+    _fields_ = [
+        ("cb", ctypes.c_uint32),
+        ("authentication_type", ctypes.c_uint32),
+        ("auth_key", ctypes.c_char * 8),
+        ("timeout", ctypes.c_uint32),
+    ]
+
 def IOTC_Set_Log_Attr(log_level, path):
     try:
         fn = _lib.IOTC_Set_Log_Attr
@@ -169,6 +177,23 @@ def IOTC_Connect_ByUID(uid):
         print(f"IOTC_Connect_ByUID error: {e}", file=sys.stderr)
         return -1
 
+def IOTC_Connect_ByUIDEx(uid, sid, auth_key, timeout=20):
+    try:
+        fn = _lib.IOTC_Connect_ByUIDEx
+        fn.argtypes = [ctypes.c_char_p, ctypes.c_int, ctypes.POINTER(St_IOTCConnectInput)]
+        fn.restype = ctypes.c_int
+        
+        connect_input = St_IOTCConnectInput()
+        connect_input.cb = ctypes.sizeof(connect_input)
+        connect_input.authentication_type = 0 # 0=Auth Key
+        connect_input.auth_key = auth_key.encode('utf-8')
+        connect_input.timeout = timeout
+        
+        return fn(uid.encode('utf-8'), sid, ctypes.byref(connect_input))
+    except Exception as e:
+        print(f"IOTC_Connect_ByUIDEx error: {e}", file=sys.stderr)
+        return -1
+
 def IOTC_Session_Close(sid):
     try:
         fn = _lib.IOTC_Session_Close
@@ -233,6 +258,7 @@ def avClientStartEx(sid, user, pwd, timeout, channel, resend=0, security_mode=0,
         avc_in.auth_type = auth_type
         # avc_in.sync_recv_data = 1 # Wyze uses 0
 
+        print(f"[Worker] AVClientStartInConfig size: {ctypes.sizeof(avc_in)}", file=sys.stderr)
         print(f"[Worker] Calling avClientStartEx C function with security_mode={security_mode}", file=sys.stderr)
         avc_out = AVClientStartOutConfig()
         avc_out.cb = ctypes.sizeof(avc_out)
