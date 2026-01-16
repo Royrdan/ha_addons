@@ -231,8 +231,9 @@ def avClientStartEx(sid, user, pwd, timeout, channel, resend=0, security_mode=0,
         avc_in.resend = resend
         avc_in.security_mode = security_mode
         avc_in.auth_type = auth_type
-        avc_in.sync_recv_data = 1
+        # avc_in.sync_recv_data = 1 # Wyze uses 0
 
+        print(f"[Worker] Calling avClientStartEx C function with security_mode={security_mode}", file=sys.stderr)
         avc_out = AVClientStartOutConfig()
         avc_out.cb = ctypes.sizeof(avc_out)
         
@@ -262,10 +263,10 @@ def avSendIOCtrl(av_index, type, payload):
         print(f"avSendIOCtrl error: {e}", file=sys.stderr)
         return -1
 
-def avRecvFrameData2(av_index, buf, size, out_buf_size, out_frame_size, out_frame_info, frame_idx, key_frame):
+def avRecvFrameData2(av_index, buf, size, out_buf_size, out_frame_size, out_frame_info, frame_idx):
     try:
         fn = _av_lib.avRecvFrameData2
-        # int avRecvFrameData2(int avIndex, char *buf, int bufSize, int *outBufSize, int *outFrameSize, char *pFrameInfo, int frameInfoSize, int *outFrameIndex);
+        # int avRecvFrameData2(int avIndex, char *buf, int bufSize, int *outBufSize, int *outFrameSize, char *pFrameInfo, int frameInfoSize, int *outFrameInfoSize, int *outFrameIndex);
         
         # We need to handle 'buf' (bytearray) as mutable buffer.
         c_buf = (ctypes.c_char * len(buf)).from_buffer(buf)
@@ -273,25 +274,22 @@ def avRecvFrameData2(av_index, buf, size, out_buf_size, out_frame_size, out_fram
         c_out_buf_size = ctypes.c_int(0)
         c_out_frame_size = ctypes.c_int(0)
         c_frame_idx = ctypes.c_int(0)
+        c_frame_info_size = ctypes.c_int(0)
         
         # Frame Info is a struct of size 24 usually. We pass a buffer.
         # SAFEGUARD: Allocate 128 bytes to prevent overflow if struct is larger
         c_frame_info = (ctypes.c_byte * 128)() 
         
-        # Args - Try 9 args (including keyFrame pointer)
+        # Args - 9 args (Wyze confirmed: frame_info_actual_len is arg 8)
         fn.argtypes = [ctypes.c_int, ctypes.POINTER(ctypes.c_char), ctypes.c_int, 
                        ctypes.POINTER(ctypes.c_int), ctypes.POINTER(ctypes.c_int),
                        ctypes.POINTER(ctypes.c_byte), ctypes.c_int, ctypes.POINTER(ctypes.c_int),
                        ctypes.POINTER(ctypes.c_int)]
         fn.restype = ctypes.c_int
         
-        c_key_frame = ctypes.c_int(0)
-
         ret = fn(av_index, c_buf, size, ctypes.byref(c_out_buf_size), ctypes.byref(c_out_frame_size),
-                 c_frame_info, 128, ctypes.byref(c_frame_idx), ctypes.byref(c_key_frame))
+                 c_frame_info, 128, ctypes.byref(c_frame_info_size), ctypes.byref(c_frame_idx))
         
-        if key_frame: key_frame[0] = c_key_frame.value
-
         # Update python mutable args (lists)
         if out_buf_size: out_buf_size[0] = c_out_buf_size.value
         if out_frame_size: out_frame_size[0] = c_out_frame_size.value

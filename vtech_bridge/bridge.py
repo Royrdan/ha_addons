@@ -28,7 +28,7 @@ except ImportError:
     def avClientStart(sid, user, pwd, timeout, serv_type, channel): return -1
     def avClientStartEx(sid, user, pwd, timeout, channel, resend=0, security_mode=0, auth_type=0): return -1
     def avSendIOCtrl(av_index, type, payload): pass
-    def avRecvFrameData2(av_index, buf, size, out_buf_size, out_frame_size, out_frame_info, frame_idx, key_frame): return -1
+    def avRecvFrameData2(av_index, buf, size, out_buf_size, out_frame_size, out_frame_info, frame_idx): return -1
     def IOTC_Set_Log_Attr(log_level, path): pass
     def IOTC_Get_SessionID(): return -1
     def TUTK_SDK_Set_Region(region_code): return 0
@@ -170,9 +170,9 @@ def bridge_worker(uid, auth_key, region, method, status_queue):
             out_frame_size = [0]
             out_frame_info = [0] * 10
             frame_idx = [0]
-            key_frame = [0]
+            # key_frame = [0]
             
-            ret = avRecvFrameData2(av_index, buf, len(buf), out_buf_size, out_frame_size, out_frame_info, frame_idx, key_frame)
+            ret = avRecvFrameData2(av_index, buf, len(buf), out_buf_size, out_frame_size, out_frame_info, frame_idx)
             
             if ret > 0:
                 frame_data = buf[:ret] 
